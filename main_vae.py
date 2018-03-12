@@ -67,7 +67,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
 
         for iter, (x_, y_) in enumerate(data_loader_vl):
             if iter * args.batch_size <= 10000:
-                if iter == data_loader_tr.dataset.__len__() // args.batch_size:
+                if iter == data_loader_vl.dataset.__len__() // args.batch_size:
                     break
 
                 if args.gpu_mode:
@@ -84,7 +84,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
                     print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid loss %.8f" %
                             ((epoch + 1), \
                             (iter + 1), \
-                            len(data_loader_tr.dataset) // args.batch_size, \
+                            len(data_loader_vl.dataset) // args.batch_size, \
                             np.mean(train_hist['tr_loss'][:-100]),\
                             loss.data[0]))
  
