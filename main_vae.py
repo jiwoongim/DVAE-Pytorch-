@@ -175,6 +175,8 @@ def parse_args():
                         help='Directory name to save the generated images')
     parser.add_argument('--log_dir', type=str, default='logs',
                         help='Directory name to save training logs')
+    parser.add_argument('--arch_type', type=str, default='fc',\
+                        help="'conv' | 'fc'")
     parser.add_argument('--z_dim', type=float, default=64)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--beta1', type=float, default=0.9)

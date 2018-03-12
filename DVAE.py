@@ -29,7 +29,7 @@ class DVAE(nn.Module):
         self.gpu_mode = args.gpu_mode
         self.model_name = args.model_type
         self.z_dim = args.z_dim
-
+        self.arch_type = args.arch_type
 
         # networks init
         self.encoder_init()
@@ -62,18 +62,33 @@ class DVAE(nn.Module):
         self.input_width = 28
         self.output_dim = 1
     
-        self.dec_fc = nn.Sequential(
-            nn.Linear(self.z_dim, 128 * (self.input_height // 4) * (self.input_width // 4)),
-            nn.BatchNorm1d(128 * (self.input_height // 4) * (self.input_width // 4)),
-            nn.ReLU(),
-        )
-        self.dec_deconv = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, self.output_dim, 4, 2, 1),
-            nn.Sigmoid(),
-        )
+
+        if self.arch_type == 'conv':
+            self.dec_layer1 = nn.Sequential(
+                nn.Linear(self.z_dim, 128 * (self.input_height // 4) * (self.input_width // 4)),
+                nn.BatchNorm1d(128 * (self.input_height // 4) * (self.input_width // 4)),
+                nn.ReLU(),
+            )
+
+            self.dec_layer2 = nn.Sequential(
+                nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.ConvTranspose2d(64, self.output_dim, 4, 2, 1),
+                nn.Sigmoid(),
+            )
+        else:
+
+            self.dec_layer1 = nn.Sequential(
+                nn.Linear(self.z_dim, self.z_dim*2),
+                nn.BatchNorm1d(self.z_dim*2),
+                nn.ReLU(),
+            )
+
+            self.dec_layer2 = nn.Sequential(
+                nn.Linear(self.z_dim*2, self.input_height * self.input_width),
+                nn.Sigmoid(),
+            )
         utils.initialize_weights(self)
    
 
@@ -82,28 +97,54 @@ class DVAE(nn.Module):
         self.input_height = 28
         self.input_width = 28
         self.input_dim = 1
+
+        if self.arch_type == 'conv':
+            self.enc_layer1 = nn.Sequential(
+                nn.Conv2d(self.input_dim, 64, 4, 2, 1),
+                nn.LeakyReLU(0.2),
+                nn.Conv2d(64, 128, 4, 2, 1),
+                nn.BatchNorm2d(128),
+                nn.LeakyReLU(0.2),
+            )
+            self.mu_fc = nn.Sequential(
+                nn.Linear(128 * (self.input_height // 4) * (self.input_width // 4), self.z_dim),
+            )
     
-        self.enc_conv = nn.Sequential(
-            nn.Conv2d(self.input_dim, 64, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(64, 128, 4, 2, 1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),
-        )
-        self.mu_fc = nn.Sequential(
-            nn.Linear(128 * (self.input_height // 4) * (self.input_width // 4), self.z_dim),
-        )
+            self.sigma_fc = nn.Sequential(
+                nn.Linear(128 * (self.input_height // 4) * (self.input_width // 4), self.z_dim),
+            )
+        else:
+
+            self.enc_layer1 = nn.Sequential(
+                nn.Linear(self.input_height*self.input_width, self.z_dim*2),
+                nn.BatchNorm1d(self.z_dim*2),
+                nn.ReLU(),
+                nn.Linear(self.z_dim*2, self.z_dim*2),
+                nn.BatchNorm1d(self.z_dim*2),
+                nn.ReLU(),
+            )
+
+            self.mu_fc = nn.Sequential(
+                nn.Linear(self.z_dim*2, self.z_dim),
+            )
     
-        self.sigma_fc = nn.Sequential(
-            nn.Linear(128 * (self.input_height // 4) * (self.input_width // 4), self.z_dim),
-        )
-     
+            self.sigma_fc = nn.Sequential(
+                nn.Linear(self.z_dim*2, self.z_dim),
+            )
+            pass
+
+
         utils.initialize_weights(self)
 
 
-    def encode(self, input):
-        x = self.enc_conv(input)
-        x = x.view(-1, 128 * (self.input_height // 4) * (self.input_width // 4))
+    def encode(self, x):
+
+        if self.arch_type == 'conv':
+            x = self.enc_layer1(x)
+            x = x.view(-1, 128 * (self.input_height // 4) * (self.input_width // 4))
+        else:
+            x = x.view([-1, self.input_height * self.input_width * self.input_dim])
+            x = self.enc_layer1(x)
         mean  = self.mu_fc(x)
         sigma = self.sigma_fc(x)
         
@@ -129,10 +170,13 @@ class DVAE(nn.Module):
 
     def decode(self, z):
     
-        x = self.dec_fc(z)
-        x = x.view(-1, 128, (self.input_height // 4), (self.input_width // 4))
-        x = self.dec_deconv(x)
-
+        x = self.dec_layer1(z)
+        if self.arch_type == 'conv':
+            x = x.view(-1, 128, (self.input_height // 4), (self.input_width // 4))
+            x = self.dec_layer2(x)
+        else:
+            x = self.dec_layer2(x)
+            x = x.view(-1, 1, self.input_height, self.input_width)
         return x
 
     
