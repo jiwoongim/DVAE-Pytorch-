@@ -1,4 +1,4 @@
-# Denoising Criterion for Variational Auto-encoding Framework (DVAE)
+# Denoising Criterion for Variational Auto-encoding Framework (Pytorch Version of DVAE)
 Python (Theano) implementation of Denoising Criterion for Variational Auto-encoding Framework code provided 
 by Daniel Jiwoong Im, Sungjin Ahn, Roland Memisevic, and Yoshua Bengio.
 Denoising criterion injects noise in input and attempts to 
