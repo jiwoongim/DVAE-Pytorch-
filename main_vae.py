@@ -242,7 +242,6 @@ def main():
                                                                 [transforms.ToTensor()])),
                                                 batch_size=args.batch_size, shuffle=False)
     elif args.dataset == 'fmnist':
-        import pdb; pdb.set_trace()
         data_loader_tr = DataLoader(datasets.FashionMNIST('data/fashion-mnist', train=True, download=True,
                                                             transform=transforms.Compose(
                                                                 [transforms.ToTensor()])),
