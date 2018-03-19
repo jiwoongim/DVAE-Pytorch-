@@ -131,7 +131,6 @@ class DVAE(nn.Module):
             self.sigma_fc = nn.Sequential(
                 nn.Linear(self.z_dim*2, self.z_dim),
             )
-            pass
 
 
         utils.initialize_weights(self)
