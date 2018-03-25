@@ -20,7 +20,7 @@ def uploadG(critic_type, dataset):
     return generator(dataset)
 
 
-def log_likelihood_samplesImean_sigma(samples, mean, logvar, dim):
+def log_likelihood_samples_mean_sigma(samples, mean, logvar, dim):
 
     constant = torch.log(torch.FloatTensor(np.asarray([np.pi]))*2)
     return constant[0] * samples.shape[dim] * 0.5  - \

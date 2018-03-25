@@ -9,6 +9,7 @@ from torchvision import datasets, transforms
 import utils 
 from DVAE import DVAE
 
+
 def train(model, args, data_loader_tr, data_loader_vl):
 
     if args.gpu_mode:
@@ -47,19 +48,19 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 # Update DVAE network
                 optimizer.zero_grad()
 
-                recon_batch, mu, logvar = model(x_)
-                loss = model.loss_function(recon_batch, x_, mu, logvar)
+                recon_batch, mu, logvar, Z = model(x_)
+                _, loss = model.loss_function(recon_batch, x_, Z, mu, logvar)
                 train_hist['tr_loss'].append(loss.data[0])
-
+        
                 loss.backward()
                 optimizer.step()
 
-                if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] loss: %.8f" %
-                            ((epoch + 1), \
-                            (iter + 1), \
-                            len(data_loader_tr.dataset) // args.batch_size, \
-                            loss.data[0]))
+                #if ((iter + 1) % 100) == 0:
+                #    print("Epoch: [%2d] [%4d/%4d] loss (elbo): %.8f"%
+                #            ((epoch + 1), \
+                #            (iter + 1), \
+                #            len(data_loader_tr.dataset) // args.batch_size, \
+                #            loss.data[0]))
 
         train_hist['per_epoch_time'].append(time.time() - epoch_start_time)
         visualize_results(model, epoch+1, args)
@@ -75,18 +76,20 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 else:
                     x_ = Variable(x_)
 
-                recon_batch, mu, logvar = model(x_)
-                loss = model.loss_function(recon_batch, x_, mu, logvar)
-                train_hist['vl_loss'].append(loss.data[0])
+                recon_batch, mu, logvar, Z = model(x_)
+                lle, elbo = model.loss_function(recon_batch, x_, Z, mu, logvar)
+                train_hist['vl_loss'].append(lle.data[0])
 
 
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid loss %.8f" %
+                    print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid  lle %.8f  Elbo (loss) %.8f" %
                             ((epoch + 1), \
                             (iter + 1), \
                             len(data_loader_vl.dataset) // args.batch_size, \
                             np.mean(train_hist['tr_loss'][:-100]),\
-                            loss.data[0]))
+                            lle.data[0],\
+                            elbo.data[0]))
+
  
 
         if epoch % 25 :
@@ -128,6 +131,8 @@ def visualize_results(model, epoch, args, sample_num=100, fix=True):
 
         samples = model.sample(sample_z_)
 
+    N,T,C,IW,IH = samples.size()
+    samples = samples.view([N,C,IW,IH])
     if args.gpu_mode:
         samples = samples.cpu().data.numpy().transpose(0, 2, 3, 1)
     else:
@@ -178,6 +183,7 @@ def parse_args():
     parser.add_argument('--arch_type', type=str, default='fc',\
                         help="'conv' | 'fc'")
     parser.add_argument('--z_dim', type=float, default=64)
+    parser.add_argument('--num_sam', type=float, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--beta1', type=float, default=0.9)
     parser.add_argument('--beta2', type=float, default=0.999)

@@ -4,12 +4,15 @@ Followed  https://github.com/znxlwm/pytorch-generative-model-collections Style o
 
 import utils, torch, time, os, pickle
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
 #from torch.distributions.distribution import Distribution
-import torch
+
+from utils import log_likelihood_samples_mean_sigma, prior_z, log_mean_exp
+
 torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
@@ -30,7 +33,7 @@ class DVAE(nn.Module):
         self.model_name = args.model_type
         self.z_dim = args.z_dim
         self.arch_type = args.arch_type
-
+        self.num_sam = args.num_sam
         # networks init
         self.encoder_init()
         self.decoder_init()
@@ -44,16 +47,45 @@ class DVAE(nn.Module):
 
         # fixed noise
         if self.gpu_mode:
-            self.sample_z_ = Variable(torch.randn((self.batch_size, self.z_dim)).cuda(), volatile=True)
+            self.sample_z_ = Variable(torch.randn((self.batch_size, 1, self.z_dim)).cuda(), volatile=True)
         else:
-            self.sample_z_ = Variable(torch.randn((self.batch_size, self.z_dim)), volatile=True)
+            self.sample_z_ = Variable(torch.randn((self.batch_size, 1, self.z_dim)), volatile=True)
 
-    def loss_function(self, recon_x, x, mu, logvar):
-        BCE = self.reconstruction_function(recon_x, x) / self.batch_size
+
+    def log_likelihood_estimate(self, recon_x, x_tile, Z, mu, logvar):
+
+        bce = x_tile * torch.log(recon_x) + (1. - x_tile) * torch.log(1 - recon_x)
+        log_p_x_z   =  torch.sum(torch.sum(torch.sum(bce, dim=4), dim=3), dim=2)
+
+        log_q_z_x = log_likelihood_samples_mean_sigma(Z, mu, logvar, dim=2)
+        log_p_z   = prior_z(Z, dim=2)
+
+
+        log_ws              = log_p_x_z - log_q_z_x + log_p_z
+        #log_ws_minus_max    = log_ws - torch.max(log_ws, dim=1, keepdim=True)[0]
+        #ws                  = torch.exp(log_ws_minus_max)
+        #normalized_ws       = ws / torch.sum(ws, dim=1, keepdim=True)
+        return torch.mean(torch.squeeze(log_mean_exp(log_ws, dim=1)), dim=0)
+
+
+    def elbo(self, recon_x, x, mu, logvar):
+
+        N, M, C, iw, ih = recon_x.shape
+        recon_x = recon_x.view([N*M,C,iw,ih])
+        BCE = self.reconstruction_function(recon_x, x) / (N*M)
         KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
-        KLD = torch.mean(torch.sum(KLD_element, dim=1).mul_(-0.5), dim=0)
-    
+        KLD = torch.mean(torch.sum(KLD_element, dim=2).mul_(-0.5))
+
         return BCE + KLD
+
+
+    def loss_function(self, recon_x, x, Z, mu, logvar):
+
+        N, C, iw, ih = x.shape
+        x_tile = x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4)
+        J = - self.log_likelihood_estimate(recon_x, x_tile, Z, mu, logvar)
+        J_low = self.elbo(recon_x, x_tile, mu, logvar)
+        return J, J_low
 
 
     def decoder_init(self):
@@ -160,7 +192,7 @@ class DVAE(nn.Module):
         return eps.mul(std).add_(mu)
 
 
-    def get_latent_var(self, x):
+    def get_latent_sample(self, x):
 
         mu, logvar = self.encode(x)
         z = self.sample(mu, logvar)
@@ -168,15 +200,19 @@ class DVAE(nn.Module):
 
 
     def decode(self, z):
-    
-        x = self.dec_layer1(z)
+  
+        N,T,D = z.size()
+        x = self.dec_layer1(z.view([-1,D]))
+
         if self.arch_type == 'conv':
             x = x.view(-1, 128, (self.input_height // 4), (self.input_width // 4))
             x = self.dec_layer2(x)
         else:
             x = self.dec_layer2(x)
             x = x.view(-1, 1, self.input_height, self.input_width)
-        return x
+        return x.view([N,T,-1,self.input_width, self.input_height])
+
+
 
     
     def forward(self, x):
@@ -192,8 +228,11 @@ class DVAE(nn.Module):
 
 
         mu, logvar = self.encode(x)
+        mu  = mu.repeat(self.num_sam,1,1).permute(1,0,2)
+        logvar = logvar.repeat(self.num_sam,1,1).permute(1,0,2)
+
         z = self.sample(mu, logvar)
         res = self.decode(z)
-        return res, mu, logvar
+        return res, mu, logvar, z
 
 
