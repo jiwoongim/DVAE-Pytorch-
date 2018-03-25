@@ -86,7 +86,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
                             ((epoch + 1), \
                             (iter + 1), \
                             len(data_loader_vl.dataset) // args.batch_size, \
-                            np.mean(train_hist['tr_loss'][:-100]),\
+                            train_hist['tr_loss'][-1],\
                             lle.data[0],\
                             elbo.data[0]))
 
