@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 import scipy.misc
 import imageio
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 
@@ -143,12 +145,13 @@ def generate_animation(path, num):
 
 def loss_plot(hist, path = 'Train_hist.png', model_name = ''):
     x = range(len(hist['tr_loss']))
+    x2=range(len(hist['vl_loss']))
 
     y1 = hist['tr_loss']
     y2 = hist['vl_loss']
 
     plt.plot(x, y1, label='train')
-    plt.plot(x, y2, label='valid')
+    plt.plot(x2, y2, label='valid')
 
     plt.xlabel('Iter')
     plt.ylabel('Loss')
@@ -174,3 +177,4 @@ def initialize_weights(net):
         elif isinstance(m, nn.Linear):
             m.weight.data.normal_(0, 0.02)
             m.bias.data.zero_()
+

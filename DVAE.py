@@ -235,4 +235,3 @@ class DVAE(nn.Module):
         res = self.decode(z)
         return res, mu, logvar, z
 
-
