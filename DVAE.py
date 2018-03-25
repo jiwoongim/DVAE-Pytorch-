@@ -195,5 +195,13 @@ class DVAE(nn.Module):
         z = self.sample(mu, logvar)
         res = self.decode(z)
         return res, mu, logvar
+    
+    
+    def measure_marginal_log_likelihood(model,dataset, subdataset='test', seed=42,minibatch_size=20,num_samples=50):
+        print("Measuring {} log likelihood".format(subdataset))
+        srng=utils.srng(seed)
+        test_x= dataset 
+        n_examples = test_x
+            
 
 

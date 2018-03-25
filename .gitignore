@@ -2,10 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+/models
 # C extensions
 *.so
-
+/data
+nohup.out
 # Distribution / packaging
 .Python
 env/
