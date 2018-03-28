@@ -59,8 +59,6 @@ class DVAE(nn.Module):
 
         log_q_z_x = log_likelihood_samples_mean_sigma(Z, mu, logvar, dim=2)
         log_p_z   = prior_z(Z, dim=2)
-
-
         log_ws              = log_p_x_z - log_q_z_x + log_p_z
         #log_ws_minus_max    = log_ws - torch.max(log_ws, dim=1, keepdim=True)[0]
         #ws                  = torch.exp(log_ws_minus_max)
@@ -73,7 +71,8 @@ class DVAE(nn.Module):
         N, M, C, iw, ih = recon_x.shape
         recon_x = recon_x.view([N*M,C,iw,ih])
         BCE = self.reconstruction_function(recon_x, x) / (N*M)
-        KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+        #0.5(mu**2 - exp(logvar) + 1 + logvar)
+        KLD_element = mu.pow(2).add_(logvar.mul_(2).exp()).mul_(-1).add_(1).add_(logvar.mul_(2))
         KLD = torch.mean(torch.sum(KLD_element, dim=2).mul_(-0.5))
 
         return BCE + KLD
@@ -112,13 +111,13 @@ class DVAE(nn.Module):
         else:
 
             self.dec_layer1 = nn.Sequential(
-                nn.Linear(self.z_dim, self.z_dim*2),
-                nn.BatchNorm1d(self.z_dim*2),
-                nn.ReLU(),
+                nn.Linear(self.z_dim, self.z_dim*4),
+                nn.BatchNorm1d(self.z_dim*4),
+                nn.Tanh(),
             )
 
             self.dec_layer2 = nn.Sequential(
-                nn.Linear(self.z_dim*2, self.input_height * self.input_width),
+                nn.Linear(self.z_dim*4, self.input_height * self.input_width),
                 nn.Sigmoid(),
             )
         utils.initialize_weights(self)
@@ -148,20 +147,20 @@ class DVAE(nn.Module):
         else:
 
             self.enc_layer1 = nn.Sequential(
-                nn.Linear(self.input_height*self.input_width, self.z_dim*2),
-                nn.BatchNorm1d(self.z_dim*2),
+                nn.Linear(self.input_height*self.input_width, self.z_dim*4),
+                nn.BatchNorm1d(self.z_dim*4),
                 nn.ReLU(),
-                nn.Linear(self.z_dim*2, self.z_dim*2),
-                nn.BatchNorm1d(self.z_dim*2),
-                nn.ReLU(),
+                nn.Linear(self.z_dim*4, self.z_dim*4),
+                nn.BatchNorm1d(self.z_dim*4),
+                nn.Tanh(),
             )
 
             self.mu_fc = nn.Sequential(
-                nn.Linear(self.z_dim*2, self.z_dim),
+                nn.Linear(self.z_dim*4, self.z_dim),
             )
     
             self.sigma_fc = nn.Sequential(
-                nn.Linear(self.z_dim*2, self.z_dim),
+                nn.Linear(self.z_dim*4, self.z_dim),
             )
 
 
@@ -225,7 +224,6 @@ class DVAE(nn.Module):
             eps = Variable(eps) # requires_grad=False
             x = x.add_(eps)
             #tmp = Distribution.Binomial(x, torch.Tensor(1-std))
-
 
         mu, logvar = self.encode(x)
         mu  = mu.repeat(self.num_sam,1,1).permute(1,0,2)
