@@ -75,7 +75,7 @@ class DVAE(nn.Module):
         x = x.contiguous().view([N*M,C,iw,ih])
         recon_x = recon_x.view([N*M,C,iw,ih])
         BCE = self.reconstruction_function(recon_x, x) / (N*M)
-        KLD_element = (logsig*2 - mu**2 - torch.exp(logsig) + 1 )
+        KLD_element = (logsig - mu**2 - torch.exp(logsig) + 1 )
         #KLD_element = mu.pow(2).add_(logsig.mul_(2).exp()).mul_(-1).add_(1).add_(logsig.mul_(2))
         #KLD = torch.mean(torch.sum(KLD_element, dim=2).mul_(-0.5))
         #KLD_element = (logsig * 2) - (torch.exp(logsig *2)) - mu**2  + 1 
@@ -120,7 +120,8 @@ class DVAE(nn.Module):
             self.dec_layer1 = nn.Sequential(
                 nn.Linear(self.z_dim, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                nn.ReLU(),
+                #nn.ReLU(),
+                nn.Tanh(),
             )
 
             self.dec_layer2 = nn.Sequential(
@@ -155,10 +156,10 @@ class DVAE(nn.Module):
 
             self.enc_layer1 = nn.Sequential(
                 nn.Linear(self.input_height*self.input_width, self.z_dim*4),
-                nn.BatchNorm1d(self.z_dim*4),
-                nn.LeakyReLU(0.2),
+                #nn.BatchNorm1d(self.z_dim*4),
+                nn.Tanh(),
                 nn.Linear(self.z_dim*4, self.z_dim*2),
-                nn.BatchNorm1d(self.z_dim*2),
+                #nn.BatchNorm1d(self.z_dim*2),
                 nn.Tanh(),
             )
 
