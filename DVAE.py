@@ -52,39 +52,46 @@ class DVAE(nn.Module):
             self.sample_z_ = Variable(torch.randn((self.batch_size, 1, self.z_dim)), volatile=True)
 
 
-    def log_likelihood_estimate(self, recon_x, x_tile, Z, mu, logvar):
+    def log_likelihood_estimate(self, recon_x, x, Z, mu, logsig):
+
+        N, C, iw, ih = x.shape
+        x_tile = x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4)
 
         bce = x_tile * torch.log(recon_x) + (1. - x_tile) * torch.log(1 - recon_x)
         log_p_x_z   =  torch.sum(torch.sum(torch.sum(bce, dim=4), dim=3), dim=2)
 
-        log_q_z_x = log_likelihood_samples_mean_sigma(Z, mu, logvar, dim=2)
+        log_q_z_x = log_likelihood_samples_mean_sigma(Z, mu, logsig, dim=2)
         log_p_z   = prior_z(Z, dim=2)
         log_ws              = log_p_x_z - log_q_z_x + log_p_z
         #log_ws_minus_max    = log_ws - torch.max(log_ws, dim=1, keepdim=True)[0]
         #ws                  = torch.exp(log_ws_minus_max)
         #normalized_ws       = ws / torch.sum(ws, dim=1, keepdim=True)
-        return torch.mean(torch.squeeze(log_mean_exp(log_ws, dim=1)), dim=0)
+        return -torch.mean(torch.squeeze(log_mean_exp(log_ws, dim=1)), dim=0)
 
 
-    def elbo(self, recon_x, x, mu, logvar):
+    def elbo(self, recon_x, x, mu, logsig):
 
         N, M, C, iw, ih = recon_x.shape
+        x = x.contiguous().view([N*M,C,iw,ih])
         recon_x = recon_x.view([N*M,C,iw,ih])
         BCE = self.reconstruction_function(recon_x, x) / (N*M)
-        #0.5(mu**2 - exp(logvar) + 1 + logvar)
-        KLD_element = mu.pow(2).add_(logvar.mul_(2).exp()).mul_(-1).add_(1).add_(logvar.mul_(2))
-        KLD = torch.mean(torch.sum(KLD_element, dim=2).mul_(-0.5))
+        KLD_element = (logsig*2 - mu**2 - torch.exp(logsig) + 1 )
+        #KLD_element = mu.pow(2).add_(logsig.mul_(2).exp()).mul_(-1).add_(1).add_(logsig.mul_(2))
+        #KLD = torch.mean(torch.sum(KLD_element, dim=2).mul_(-0.5))
+        #KLD_element = (logsig * 2) - (torch.exp(logsig *2)) - mu**2  + 1 
+        KLD = - torch.mean(torch.sum(KLD_element* 0.5, dim=2) )
 
         return BCE + KLD
 
 
-    def loss_function(self, recon_x, x, Z, mu, logvar):
+    def loss_function(self, recon_x, x, mu, logsig):
 
         N, C, iw, ih = x.shape
         x_tile = x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4)
-        J = - self.log_likelihood_estimate(recon_x, x_tile, Z, mu, logvar)
-        J_low = self.elbo(recon_x, x_tile, mu, logvar)
-        return J, J_low
+        #J = - self.log_likelihood_estimate(recon_x, x_tile, Z, mu, logsig)
+        J_low = self.elbo(recon_x, x_tile, mu, logsig)
+        return J_low
+
 
 
     def decoder_init(self):
@@ -113,7 +120,7 @@ class DVAE(nn.Module):
             self.dec_layer1 = nn.Sequential(
                 nn.Linear(self.z_dim, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                nn.Tanh(),
+                nn.ReLU(),
             )
 
             self.dec_layer2 = nn.Sequential(
@@ -149,18 +156,18 @@ class DVAE(nn.Module):
             self.enc_layer1 = nn.Sequential(
                 nn.Linear(self.input_height*self.input_width, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                nn.ReLU(),
-                nn.Linear(self.z_dim*4, self.z_dim*4),
-                nn.BatchNorm1d(self.z_dim*4),
+                nn.LeakyReLU(0.2),
+                nn.Linear(self.z_dim*4, self.z_dim*2),
+                nn.BatchNorm1d(self.z_dim*2),
                 nn.Tanh(),
             )
 
             self.mu_fc = nn.Sequential(
-                nn.Linear(self.z_dim*4, self.z_dim),
+                nn.Linear(self.z_dim*2, self.z_dim),
             )
     
             self.sigma_fc = nn.Sequential(
-                nn.Linear(self.z_dim*4, self.z_dim),
+                nn.Linear(self.z_dim*2, self.z_dim),
             )
 
 
@@ -181,8 +188,9 @@ class DVAE(nn.Module):
         return mean, sigma
 
 
-    def sample(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
+    def sample(self, mu, logsig):
+        #std = logsig.mul(0.5).exp_()
+        std = torch.exp(logsig*0.5)
         if self.gpu_mode :
             eps = torch.cuda.FloatTensor(std.size()).normal_()
         else:
@@ -193,8 +201,8 @@ class DVAE(nn.Module):
 
     def get_latent_sample(self, x):
 
-        mu, logvar = self.encode(x)
-        z = self.sample(mu, logvar)
+        mu, logsig = self.encode(x)
+        z = self.sample(mu, logsig)
         return z
 
 
@@ -211,8 +219,6 @@ class DVAE(nn.Module):
             x = x.view(-1, 1, self.input_height, self.input_width)
         return x.view([N,T,-1,self.input_width, self.input_height])
 
-
-
     
     def forward(self, x):
 
@@ -225,11 +231,11 @@ class DVAE(nn.Module):
             x = x.add_(eps)
             #tmp = Distribution.Binomial(x, torch.Tensor(1-std))
 
-        mu, logvar = self.encode(x)
+        mu, logsig = self.encode(x)
         mu  = mu.repeat(self.num_sam,1,1).permute(1,0,2)
-        logvar = logvar.repeat(self.num_sam,1,1).permute(1,0,2)
+        logsig = logsig.repeat(self.num_sam,1,1).permute(1,0,2)
 
-        z = self.sample(mu, logvar)
+        z = self.sample(mu, logsig)
         res = self.decode(z)
-        return res, mu, logvar, z
+        return res, mu, logsig, z
 

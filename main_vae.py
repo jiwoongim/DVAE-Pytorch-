@@ -49,7 +49,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 optimizer.zero_grad()
 
                 recon_batch, mu, logvar, Z = model(x_)
-                _, loss = model.loss_function(recon_batch, x_, Z, mu, logvar)
+                loss = model.loss_function(recon_batch, x_, mu, logvar)
                 train_hist['tr_loss'].append(loss.data[0])
         
                 loss.backward()
@@ -77,7 +77,8 @@ def train(model, args, data_loader_tr, data_loader_vl):
                     x_ = Variable(x_)
 
                 recon_batch, mu, logvar, Z = model(x_)
-                lle, elbo = model.loss_function(recon_batch, x_, Z, mu, logvar)
+                elbo = model.loss_function(recon_batch, x_, mu, logvar)
+                lle  = model.log_likelihood_estimate(recon_batch, x_, Z, mu, logvar)
                 train_hist['vl_loss'].append(lle.data[0])
 
 
@@ -171,7 +172,7 @@ def parse_args():
                         help='The type of VAE')#, required=True)
     parser.add_argument('--dataset', type=str, default='mnist', choices=['mnist', 'fmnist'],
                         help='The name of dataset')
-    parser.add_argument('--epoch', type=int, default=200, help='The number of epochs to run')
+    parser.add_argument('--epoch', type=int, default=500, help='The number of epochs to run')
     parser.add_argument('--batch_size', type=int, default=100, help='The size of batch')
     parser.add_argument('--save_dir', type=str, default='models',
                         help='Directory name to save the model')
@@ -181,8 +182,8 @@ def parse_args():
                         help='Directory name to save training logs')
     parser.add_argument('--arch_type', type=str, default='fc',\
                         help="'conv' | 'fc'")
-    parser.add_argument('--z_dim', type=float, default=64)
-    parser.add_argument('--num_sam', type=float, default=10)
+    parser.add_argument('--z_dim', type=float, default=128)
+    parser.add_argument('--num_sam', type=float, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--beta1', type=float, default=0.9)
     parser.add_argument('--beta2', type=float, default=0.999)
