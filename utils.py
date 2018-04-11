@@ -25,13 +25,13 @@ def uploadG(critic_type, dataset):
 def log_likelihood_samples_mean_sigma(samples, mean, logvar, dim):
 
     constant = torch.log(torch.FloatTensor(np.asarray([np.pi]))*2)
-    return constant[0] * samples.shape[dim] * 0.5  - \
+    return - constant[0] * samples.shape[dim] * 0.5  - \
                torch.sum(((samples-mean)/torch.exp(logvar*0.5))**2 + logvar, dim=dim) * 0.5
 
 def prior_z(samples, dim):
 
     constant = torch.log(torch.FloatTensor(np.asarray([np.pi]))*2)
-    return constant[0]*samples.shape[dim] * 0.5 - torch.sum(samples**2, dim=dim) * 0.5
+    return - constant[0]*samples.shape[dim] * 0.5 - torch.sum(samples**2, dim=dim) * 0.5
 
 
 def log_mean_exp(x, dim=1):
