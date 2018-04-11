@@ -221,9 +221,9 @@ class DVAE(nn.Module):
         return x.view([N,T,-1,self.input_width, self.input_height])
 
     
-    def forward(self, x):
+    def forward(self, x, testF=False):
 
-        if self.model_name == 'DVAE':
+        if self.model_name == 'DVAE' and not testF:
             if self.gpu_mode:
                 eps = torch.randn(x.size()).cuda() * 0.05
             else:

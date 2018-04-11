@@ -76,7 +76,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 else:
                     x_ = Variable(x_)
 
-                recon_batch, mu, logvar, Z = model(x_)
+                recon_batch, mu, logvar, Z = model(x_, testF=1)
                 elbo = model.loss_function(recon_batch, x_, mu, logvar)
                 lle  = model.log_likelihood_estimate(recon_batch, x_, Z, mu, logvar)
                 train_hist['vl_loss'].append(lle.data[0])
