@@ -159,16 +159,16 @@ class DVAE(nn.Module):
                 nn.BatchNorm1d(self.z_dim*4),
                 nn.Tanh(),
                 nn.Linear(self.z_dim*4, self.z_dim*2),
-                nn.BatchNorm1d(self.z_dim*2),
+                nn.BatchNorm1d(self.z_dim*4),
                 nn.Tanh(),
             )
 
             self.mu_fc = nn.Sequential(
-                nn.Linear(self.z_dim*2, self.z_dim),
+                nn.Linear(self.z_dim*4, self.z_dim),
             )
     
             self.sigma_fc = nn.Sequential(
-                nn.Linear(self.z_dim*2, self.z_dim),
+                nn.Linear(self.z_dim*4, self.z_dim),
             )
 
 
