@@ -158,7 +158,7 @@ class DVAE(nn.Module):
                 nn.Linear(self.input_height*self.input_width, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
                 nn.Tanh(),
-                nn.Linear(self.z_dim*4, self.z_dim*2),
+                nn.Linear(self.z_dim*4, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
                 nn.Tanh(),
             )
