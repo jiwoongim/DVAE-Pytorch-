@@ -120,7 +120,10 @@ class DVAE(nn.Module):
             self.dec_layer1 = nn.Sequential(
                 nn.Linear(self.z_dim, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                #nn.ReLU(),
+                nn.LeakyReLU(0.2),
+                nn.Linear(self.z_dim*4, self.z_dim*4),
+                nn.BatchNorm1d(self.z_dim*4),
+                #nn.LeakyReLU(0.2),
                 nn.Tanh(),
             )
 
@@ -157,10 +160,10 @@ class DVAE(nn.Module):
             self.enc_layer1 = nn.Sequential(
                 nn.Linear(self.input_height*self.input_width, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                nn.Tanh(),
+                nn.LeakyReLU(0.2),
                 nn.Linear(self.z_dim*4, self.z_dim*4),
                 nn.BatchNorm1d(self.z_dim*4),
-                nn.Tanh(),
+                nn.LeakyReLU(0.2),
             )
 
             self.mu_fc = nn.Sequential(
@@ -193,9 +196,9 @@ class DVAE(nn.Module):
         #std = logsig.mul(0.5).exp_()
         std = torch.exp(logsig*0.5)
         if self.gpu_mode :
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
+            eps = torch.randn(std.size()).cuda()
         else:
-            eps = torch.FloatTensor(std.size()).normal_()
+            eps = torch.randn(std.size())
         eps = Variable(eps)
         return eps.mul(std).add_(mu)
 
