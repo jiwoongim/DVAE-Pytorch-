@@ -228,9 +228,9 @@ class DVAE(nn.Module):
 
         if self.model_name == 'DVAE' and not testF:
             if self.gpu_mode:
-                eps = torch.randn(x.size()).cuda() * 0.05
+                eps = torch.randn(x.size()).cuda() * 0.025
             else:
-                eps = torch.randn(x.size()) * 0.05
+                eps = torch.randn(x.size()) * 0.025
             eps = Variable(eps) # requires_grad=False
             x = x.add_(eps)
             #tmp = Distribution.Binomial(x, torch.Tensor(1-std))

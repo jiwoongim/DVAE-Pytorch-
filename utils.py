@@ -13,6 +13,21 @@ torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
 
+#def salt_peper_noise(rng, input, corruption_dist):
+#
+#    from torch.distributions import Distribution
+#    
+#    #Bernoulli
+#    # salt and pepper noise
+#    print 'DAE uses salt and pepper noise'
+#    a = MRG.binomial(size=input.shape, n=1,\
+#            p=1-corruption_dist,dtype=theano.config.floatX)
+#    b = MRG.binomial(size=input.shape, n=1,\
+#            p=corruption_dist,dtype=theano.config.floatX)
+#
+#    c = T.eq(a,0) * b
+#    return input * a + c
+
 def uploadG(critic_type, dataset):
 
     if critic_type == 'LSGAN':
