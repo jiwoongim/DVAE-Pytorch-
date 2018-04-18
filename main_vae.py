@@ -171,6 +171,17 @@ def parse_args():
     parser.add_argument('--model_type', type=str, default='VAE',
                         choices=['VAE', 'DVAE'],
                         help='The type of VAE')#, required=True)
+    
+    #Argument used on avb implementation. Please review Daniel. 
+    arser.add_argument("--test-nite", default=0, type=int, help="Number of iterations of ite.")
+    parser.add_argument("--test-nais", default=10, type=int, help="Number of iterations of ais.")
+    parser.add_argument("--test-ais-nchains", default=16, type=int, help="Number of chains for ais.")
+    parser.add_argument("--test-ais-nsteps", default=100, type=int, help="Number of annealing steps for ais.")
+    parser.add_argument("--test-ais-eps", default=1e-2, type=float, help="Stepsize for AIS.")
+    parser.add_argument("--test-is-center-posterior", default=False, action='store_true', help="Wether to center posterior plots.")
+
+    parser.add_argument('--output_size',type=int ,default=28,help='The size of the output images to produce.')
+    parser.add_argument('--c-dim', default=3, type=int, help='Dimension of image color.')
     parser.add_argument('--dataset', type=str, default='mnist', choices=['mnist', 'fmnist'],
                         help='The name of dataset')
     parser.add_argument('--epoch', type=int, default=1000, help='The number of epochs to run')
