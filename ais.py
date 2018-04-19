@@ -11,12 +11,12 @@ torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
 class AIS(object):
-    def __init__(self,x_text,params_posterior,decoder,energy0,get_z0,args, eps_scale=None):
+    def __init__(self,x_text,params_posterior,decoder,energy0,sample,args, eps_scale=None):
         self.x_in = x_test
         self.params_posterior_in = params_posterior
         self.decoder = decoder
         self.energy0 = energy0
-        self.get_z0 = get_z0
+        self.get_z0 = sample
         self.args = args
         self.gpu_mode = args.gpu_mode
     
@@ -38,7 +38,7 @@ class AIS(object):
             for p0 in self.params_posterior_in
         ]
         self.eps_scale = Variable(torch.zeros([batch_size, z_dim]), trainable=False)
-        mass = 1.#/self.var0
+        self.mass = 1.#/self.var0
         mass_sqrt = 1.#/self.std0
         self.z = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
         self.p = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
@@ -51,15 +51,15 @@ class AIS(object):
             self.p_rnd = torch.randn([batch_size, z_dim])* mass_sqrt
             
         
-        self.eps = torch.FloatTensor()
-        self.beta = torch.FloatTensor()
+        #self.eps = torch.FloatTensor() 
+        #self.beta = torch.FloatTensor()
 
         # Hamiltoninan
         self.U = self.get_energy(self.z)
-        self.V = 0.5 * torch.sum(torch.square(self.p)/mass, [1])
+        self.V = 0.5 * torch.sum(torch.square(self.p)/mass, dim=1)
         self.H = self.U + self.V
         self.U_current = self.get_energy(self.z_current)
-        self.V_current = 0.5 * torch.sum(torch.square(self.p_current)/mass, [1])
+        self.V_current = 0.5 * torch.sum(torch.square(self.p_current)/mass, dim=1)
         self.H_current = self.U_current + self.V_current
 
         # Intialize
@@ -98,6 +98,19 @@ class AIS(object):
             is_accept_rs * self.z + (1. - is_accept_rs) * self.z_current
         )
 
+    def euler_steps(self,eps, beta):
+        
+        eps_scaled = self.eps_scale * eps
+        self.z = self.z + (eps_scaled * self.p/self.mass)
+        self.euler_z = self.z
+        self.U=self.get_energy(self.z)
+        self.U.backward()
+        gradU = self.z.grad() 
+        gradU = gradU.view([batch_size, z_dim])
+        return self.p - eps_scaled*gradU
+        #gradU = torch.reshape(torch.gradients(self.U, self.z), [batch_size, z_dim])
+        #self.euler_p = self.p.assign_sub(eps_scaled * gradU)
+                
     def get_energy(self, z):
         E = self.beta*self.get_energy1(z) + (1 - self.beta) * self.get_energy0(z)
         return E
@@ -134,13 +147,15 @@ class AIS(object):
         accept_rate = 1.
 
         t = time.time()
-
-        sess.run(self.init_hmc)
+        # Initializing hmc 
+        self.z_current = self.get_z0(self.params_posterior) 
+        #sess.run(self.init_hmc)
+       
 
         progress = tqdm(range(nsteps), desc="HMC")
         for i in progress:
-            f0 = -sess.run(self.U_current, feed_dict={self.beta: betas[i]})
-            f1 = -sess.run(self.U_current, feed_dict={self.beta: betas[i+1]})
+            f0 = -self.get_energy(betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})
+            f1 = -self.get_energy(betas[i+1]) #-sess.run(self.U_current, feed_dict={self.beta: betas[i+1]})
             logpx += f1 - f0
 
             if i < nsteps-1:
@@ -154,15 +169,20 @@ class AIS(object):
                     logw="%.2f+-%.2f" % (logpx.mean(), logpx.std()),
                     eps="%.2e" % eps,
                 )
-        samples = sess.run(self.z_current)
+        samples = self.z_current
 
         return logpx, samples
 
     def run_hmc_step(self, sess, beta, eps):
         L = 10 # TODO: make configuratble
         # Initialize
-        sess.run(self.init_hmc_step)
-        sess.run(self.init_hmc_step2)
+        #sess.run(self.init_hmc_step)
+        # initializing  hmc step 
+        self.p_current =[self.p_rnd]
+        # initializing hmc step2
+        #sess.run(self.init_hmc_step2)
+        self.z = self.z_current
+        self.p = self.p_current
 
         # Leapfrog steps
         sess.run(self.euler_p, feed_dict={self.eps: eps/2, self.beta: beta})
