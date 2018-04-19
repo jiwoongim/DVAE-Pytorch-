@@ -97,22 +97,54 @@ class AIS(object):
         self.update_z = self.z_current.assign(
             is_accept_rs * self.z + (1. - is_accept_rs) * self.z_current
         )
+    
+    def get_hamiltonian(beta,):
+            
+        self.U = self.get_energy(self.z, beta)
+        self.V = 0.5 * torch.sum((self.p*self.p)/self.mass, dim=1)
+        return self.U + self.V
+    
+    def get_hamiltonian_cur(beta):
+        self.U_current = self.get_energy(self.z_current,beta)
+        self.V_current = 0.5 * torch.sum((self.p_current*self.p_current)/self.mass, dim=1)
+        return self.U_current + self.V_current
+    
+    
+    def update_z(self, beta):
+          
+        # Accept 
+        #TODO Convert tf.random_uniform([batch_size]) to torch code
+        H = self.get_hamiltonian(beta)
+        H_current = self.get_hamiltonian_cur(beta)
+        is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(H_current - H), torch.cuda.FloatTensor)
+        self.accept_rate = torch.mean(is_accept)
 
-    def euler_steps(self,eps, beta):
+        is_accept_rs = is_accept.view([batch_size, 1])
+        self.z_current = is_accept_rs * self.z + (1. - is_accept_rs) * self.z_current
+        return self.z_current, self.accept_rate
         
+        
+    def euler_step(self,eps, beta):
+        
+        self.euler_step_z(eps)
+        self.euler_step_p(eps,beta)
+
+        #gradU = torch.reshape(torch.gradients(self.U, self.z), [batch_size, z_dim])
+        #self.euler_p = self.p.assign_sub(eps_scaled * gradU)
+    
+    def euler_step_z(self, eps):
         eps_scaled = self.eps_scale * eps
         self.z = self.z + (eps_scaled * self.p/self.mass)
-        self.euler_z = self.z
-        self.U=self.get_energy(self.z)
+    
+    def euler_step_p(self, eps, beta):
+        self.U=self.get_energy(self.z, beta)
         self.U.backward()
         gradU = self.z.grad() 
         gradU = gradU.view([batch_size, z_dim])
-        return self.p - eps_scaled*gradU
-        #gradU = torch.reshape(torch.gradients(self.U, self.z), [batch_size, z_dim])
-        #self.euler_p = self.p.assign_sub(eps_scaled * gradU)
-                
-    def get_energy(self, z):
-        E = self.beta*self.get_energy1(z) + (1 - self.beta) * self.get_energy0(z)
+        self.p = self.p - eps_scaled*gradU
+    
+    def get_energy(self, z, beta):
+        E = beta*self.get_energy1(z) + (1 - beta) * self.get_energy0(z)
         return E
 
     def get_energy1(self, z):
@@ -154,8 +186,8 @@ class AIS(object):
 
         progress = tqdm(range(nsteps), desc="HMC")
         for i in progress:
-            f0 = -self.get_energy(betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})
-            f1 = -self.get_energy(betas[i+1]) #-sess.run(self.U_current, feed_dict={self.beta: betas[i+1]})
+            f0 = -self.get_energy(self.z_current, betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})
+            f1 = -self.get_energy(self.z_current, betas[i+1]) #-sess.run(self.U_current, feed_dict={self.beta: betas[i+1]})
             logpx += f1 - f0
 
             if i < nsteps-1:
@@ -175,25 +207,32 @@ class AIS(object):
 
     def run_hmc_step(self, sess, beta, eps):
         L = 10 # TODO: make configuratble
+        
         # Initialize
         #sess.run(self.init_hmc_step)
         # initializing  hmc step 
         self.p_current =[self.p_rnd]
+        
         # initializing hmc step2
         #sess.run(self.init_hmc_step2)
         self.z = self.z_current
         self.p = self.p_current
 
         # Leapfrog steps
-        sess.run(self.euler_p, feed_dict={self.eps: eps/2, self.beta: beta})
+        #sess.run(self.euler_p, feed_dict={self.eps: eps/2, self.beta: beta})
+        self.euler_step(eps/2, beta)
         for i in range(L+1):
-            sess.run(self.euler_z, feed_dict={self.eps: eps, self.beta: beta})
+            self.euler_step_z(eps) #BETA may need to be passed in
+            #sess.run(self.euler_z, feed_dict={self.eps: eps, self.beta: beta})
             if i < L:
-                sess.run(self.euler_p, feed_dict={self.eps: eps, self.beta: beta})
-        sess.run(self.euler_p, feed_dict={self.eps: eps/2, self.beta: beta})
+                self.euler_step_p(eps, beta)
+                #sess.run(self.euler_p, feed_dict={self.eps: eps, self.beta: beta})
+        self.euler_step_p(eps/2, beta)
+        #sess.run(self.euler_p, feed_dict={self.eps: eps/2, self.beta: beta})
 
-        # Update z
-        _, accept_rate = sess.run([self.update_z, self.accept_rate], feed_dict={self.beta: beta})
+        # Update Z
+        _, accept_rate = self.update_z(beta)
+        #_, accept_rate = sess.run([self.update_z, self.accept_rate], feed_dict={self.beta: beta})
         return accept_rate
 
 
