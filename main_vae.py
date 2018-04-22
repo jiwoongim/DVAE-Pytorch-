@@ -26,6 +26,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
     train_hist = {}
     train_hist['tr_loss'] = []
     train_hist['vl_loss'] = []
+    train_hist['ais_loss'] = []
     train_hist['per_epoch_time'] = []
     train_hist['total_time'] = []
 
@@ -82,15 +83,17 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 lle  = model.log_likelihood_estimate(recon_batch, x_, Z, mu, logvar)
                 train_hist['vl_loss'].append(lle.data[0])
 
-
+                ais = model.testing_ais(recon_batch, x_, Z, mu, logvar,args)
+                ['ais_loss'].append(ais.data[0])
                 if ((iter + 1) % 100) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid  lle %.8f  Elbo (loss) %.8f" %
+                    print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid  lle %.8f  Elbo (loss) %.8f  AIS %.8f" %
                             ((epoch + 1), \
                             (iter + 1), \
                             len(data_loader_vl.dataset) // args.batch_size, \
                             train_hist['tr_loss'][-1],\
                             lle.data[0],\
-                            elbo.data[0]))
+                            elbo.data[0],ais.data[0]))
+                    
 
  
 
@@ -173,13 +176,14 @@ def parse_args():
                         help='The type of VAE')#, required=True)
     
     #Argument used on avb implementation. Please review Daniel. 
-    arser.add_argument("--test-nite", default=0, type=int, help="Number of iterations of ite.")
+    parser.add_argument("--test-nite", default=0, type=int, help="Number of iterations of ite.")
     parser.add_argument("--test-nais", default=10, type=int, help="Number of iterations of ais.")
     parser.add_argument("--test-ais-nchains", default=16, type=int, help="Number of chains for ais.")
     parser.add_argument("--test-ais-nsteps", default=100, type=int, help="Number of annealing steps for ais.")
     parser.add_argument("--test-ais-eps", default=1e-2, type=float, help="Stepsize for AIS.")
     parser.add_argument("--test-is-center-posterior", default=False, action='store_true', help="Wether to center posterior plots.")
 
+    parser.add_argument('--recon_type',default='binary',choices=['binary'],type=str,help="Reconstruction Type")
     parser.add_argument('--output_size',type=int ,default=28,help='The size of the output images to produce.')
     parser.add_argument('--c-dim', default=3, type=int, help='Dimension of image color.')
     parser.add_argument('--dataset', type=str, default='mnist', choices=['mnist', 'fmnist'],
@@ -188,6 +192,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=100, help='The size of batch')
     parser.add_argument('--save_dir', type=str, default='models',
                         help='Directory name to save the model')
+    parser.add_argument('--eval_dir', type=str, default='validate',
+                        help='Directory name to save validation')
     parser.add_argument('--result_dir', type=str, default='results',
                         help='Directory name to save the generated images')
     parser.add_argument('--log_dir', type=str, default='logs',

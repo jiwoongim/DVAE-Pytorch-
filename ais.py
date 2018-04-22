@@ -3,6 +3,7 @@ import numpy as np
 import scipy as sp
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
@@ -11,40 +12,39 @@ torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
 class AIS(object):
-    def __init__(self,x_text,params_posterior,decoder,energy0,sample,args, eps_scale=None):
+    def __init__(self,x_test,params_posterior,decoder,energy0,sample,args, eps_scale=None):
         self.x_in = x_test
         self.params_posterior_in = params_posterior
         self.decoder = decoder
-        self.energy0 = energy0
+        #self.energy0 = energy0
         self.get_z0 = sample
         self.args = args
         self.gpu_mode = args.gpu_mode
     
         if eps_scale is None:
-            self.eps_scale_in = torch.ones([args['batch_size'], args['z_dim']])
+            self.eps_scale_in = torch.ones([args.batch_size, args.z_dim])
         else:
             self.eps_scale_in = eps_scale
     
         self.build_model()
     def build_model(self):
-        batch_size= self.args['batch_size']
-        output_size= self.args['output_size']
-        c_dim = self.args['c_dim']
-        z_dim = self.args['z_dim']
-        self.x=Variable(torch.zeros([batch_size,output_size,output_size,c_dim],
-                                    dtype=np.float32),trainable=False)
+        batch_size= self.args.batch_size
+        output_size= self.args.output_size
+        c_dim = self.args.c_dim
+        z_dim = self.args.z_dim
+        self.x=Variable(torch.Tensor([batch_size,output_size,output_size,c_dim]))
         self.params_posterior = [
-            Variable(torch.zeros(p0.get_shape()), trainable=False)
+            Variable(torch.zeros(0))
             for p0 in self.params_posterior_in
         ]
-        self.eps_scale = Variable(torch.zeros([batch_size, z_dim]), trainable=False)
+        self.eps_scale = Variable(torch.Tensor([batch_size, z_dim]))
         self.mass = 1.#/self.var0
         mass_sqrt = 1.#/self.std0
-        self.z = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
-        self.p = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
+        self.z = Variable(torch.Tensor([batch_size, z_dim]))
+        self.p = Variable(torch.Tensor([batch_size, z_dim]))
 
-        self.z_current = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
-        self.p_current = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
+        self.z_current = Variable(torch.Tensor([batch_size, z_dim]))
+        self.p_current = Variable(torch.Tensor([batch_size, z_dim]))
         if self.gpu_mode:
             self.p_rnd = torch.randn([batch_size, z_dim]).cuda() * mass_sqrt
         else:
@@ -55,7 +55,7 @@ class AIS(object):
         #self.beta = torch.FloatTensor()
 
         # Hamiltoninan
-        self.U = self.get_energy(self.z)
+        self.U = self.get_energy(self.z,1)
         self.V = 0.5 * torch.sum(torch.square(self.p)/mass, dim=1)
         self.H = self.U + self.V
         self.U_current = self.get_energy(self.z_current)
@@ -90,7 +90,8 @@ class AIS(object):
         self.euler_p = self.p.assign_sub(eps_scaled * gradU)
 
         # Accept
-        self.is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(self.H_current - self.H), tf.float32)
+         #self.is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(self.H_current - self.H), tf.float32)
+        self.is_accept = torch.cast(torch.FloatTensor([batch_size]).uniform_()< toch.exp((self.H_current - self.H),torch.cuda.FloatTensor))
         self.accept_rate = torch.mean(self.is_accept)
 
         is_accept_rs = torch.reshape(self.is_accept, [batch_size, 1])
@@ -116,7 +117,7 @@ class AIS(object):
         #TODO Convert tf.random_uniform([batch_size]) to torch code
         H = self.get_hamiltonian(beta)
         H_current = self.get_hamiltonian_cur(beta)
-        is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(H_current - H), torch.cuda.FloatTensor)
+        is_accept = torch.cast(torch.FloatTensor([batch_size]).uniform_() < torch.exp((H_current - H), torch.cuda.FloatTensor))
         self.accept_rate = torch.mean(is_accept)
 
         is_accept_rs = is_accept.view([batch_size, 1])
@@ -145,8 +146,8 @@ class AIS(object):
     
     def get_energy(self, z, beta):
         E = beta*self.get_energy1(z) + (1 - beta) * self.get_energy0(z)
-        return E
-
+        return E    
+        
     def get_energy1(self, z):
         decoder_out = self.decoder(z)
         E = get_reconstr_err(decoder_out, self.x, self.config)
@@ -182,8 +183,6 @@ class AIS(object):
         # Initializing hmc 
         self.z_current = self.get_z0(self.params_posterior) 
         #sess.run(self.init_hmc)
-       
-
         progress = tqdm(range(nsteps), desc="HMC")
         for i in progress:
             f0 = -self.get_energy(self.z_current, betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})

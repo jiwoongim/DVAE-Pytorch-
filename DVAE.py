@@ -3,12 +3,14 @@ Followed  https://github.com/znxlwm/pytorch-generative-model-collections Style o
 """
 
 import utils, torch, time, os, pickle
+from ais import AIS
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
+from collections import defaultdict
 #from torch.distributions.distribution import Distribution
 
 from utils import log_likelihood_samples_mean_sigma, prior_z, log_mean_exp
@@ -242,4 +244,50 @@ class DVAE(nn.Module):
         z = self.sample(mu, logsig)
         res = self.decode(z)
         return res, mu, logsig, z
+    
+    def energy0(z, theta):
+        z_mean = theta[0]
+        log_z_std = theta[1]
+        return -utils.get_pdf_gauss(z_mean, log_z_std, z)
+    
+    def get_z0(theta,batch_size,z_dim):
+        z_mean = theta[0]
+        z_std = torch.exp(theta[1])
+        return z_mean + z_std * torch.randn([batch_size, z_dim])
+    
+    def testing_ais(self,recon_batch,x_,Z,mu,logvar,args):
+        params_posterior = [mu, logvar]
+        decoder = self.decode
+        log_dir = args.log_dir
+        eval_dir = args.eval_dir
+        z_dim = args.z_dim
+        stats = defaultdict(list)
+
+        results_dir = os.path.join(eval_dir, "results")
+
+        batch_size = args.batch_size
+        ais_nchains = args.test_ais_nchains
+        test_nais = args.test_nais
+        
+        ais=AIS(x_,params_posterior,decoder,self.energy0,self.get_z0,args)
+        ais.read_batch(recon_batch)
+        progress_ais = tqdm(range(ais_nchains), desc="AIS")
+        for j in progress_ais:
+            ais_res[j], ais_samples[j] = ais.evaluate(sess)
+            ais_lprob, ais_ess = ais.average_weights(ais_res[:j+1], axis=0)
+            progress_ais.set_postfix(
+                lprob="%.2f+-%.2f" % (ais_lprob.mean(), ais_lprob.std()),
+                ess="%.2f/%d" % (ais_ess.mean(), j+1)
+            )
+        stats["ais_mean"].append(np.mean(ais_lprob))
+        stats["ais_std"].append(np.std(ais_lprob))
+        stats["ais_ess_mean"].append(np.mean(ais_ess))
+        stats["ais_ess_std"].append(np.std(ais_ess))
+        return np.mean(ais_ess),np.std(ais_ess)
+        
+        
+        
+        
+        
+        
 
