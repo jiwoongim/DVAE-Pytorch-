@@ -246,12 +246,9 @@ class DVAE(nn.Module):
         return res, mu, logsig, z
     
     def energy0(self,z, theta):
-        N,D,T = z.size()
+        N, T = z.size()
         z_mean = theta[0]
-        z_mean = z_mean.view(N*D,T)
         log_z_std = theta[1]
-        log_z_std = log_z_std.view(N*D,T)
-        z = z.view(N*D,T)
         return -utils.get_pdf_gauss(z_mean, log_z_std, z)
     
     def get_z0(theta,batch_size,z_dim):
@@ -281,7 +278,7 @@ class DVAE(nn.Module):
         
         x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
         x = x_tile.view([self.num_sam*N,-1])
-        ais=AIS(x,Z,params_posterior,decoder,self.energy0,z,args)
+        ais=AIS(x,params_posterior,decoder,self.energy0,z,args)
         
         
         progress_ais = tqdm(range(ais_nchains), desc="AIS")
