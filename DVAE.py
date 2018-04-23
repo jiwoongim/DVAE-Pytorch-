@@ -246,7 +246,7 @@ class DVAE(nn.Module):
         return res, mu, logsig, z
    
     
-    def get_z0(batch_size,z_dim,z_mean, z_std):
+    def get_z0(self, batch_size,z_dim,z_mean, z_std):
         z_std = torch.exp(z_std)
         return z_mean + z_std * torch.randn([batch_size, z_dim])
     
