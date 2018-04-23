@@ -253,11 +253,13 @@ class DVAE(nn.Module):
      
     
     def testing_ais(self,recon_batch,x_,mu,logvar,args):
-        params_posterior = [mu, logvar]
+        params_posterior = [mu, 0.5*logvar]
         
         decoder = self.decode   
         log_dir = args.log_dir
         
+        mu = mu.view([self.num_sam*self.batch_size,-1])
+        logvar = logvar.view([self.num_sam*self.batch_size,-1])
         z = self.get_z0(args.batch_size,args.z_dim,mu,logvar)
         z = z.view([self.num_sam*self.batch_size,-1])
         
