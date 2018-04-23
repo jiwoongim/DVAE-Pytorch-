@@ -253,13 +253,15 @@ class DVAE(nn.Module):
      
     
     def testing_ais(self,recon_batch,x_,mu,logvar,args):
-        params_posterior = [mu, 0.5*logvar]
+
         
         decoder = self.decode   
         log_dir = args.log_dir
         
+        logstd = 0.5*logvar
+        logstd = logstd.view([self.num_sam*self.batch_size,-1])
         mu = mu.view([self.num_sam*self.batch_size,-1])
-        logvar = logvar.view([self.num_sam*self.batch_size,-1])
+        
         z = self.get_z0(args.batch_size,args.z_dim,mu,logvar)
         z = z.view([self.num_sam*self.batch_size,-1])
         
@@ -275,6 +277,8 @@ class DVAE(nn.Module):
         
         x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
         x = x_tile.view([self.num_sam*N,-1])
+        
+        params_posterior = [mu, logstd]
         ais=AIS(x,params_posterior,decoder,z,args)
         
         
