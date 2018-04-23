@@ -12,11 +12,10 @@ torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
 class AIS(object):
-    def __init__(self,x_test,params_posterior,decoder,energy0,z_current,args, eps_scale=None):
+    def __init__(self,x_test,params_posterior,decoder,E,z_current,args, eps_scale=None):
         self.x_in = x_test
         self.params_posterior_in = params_posterior
         self.decoder = decoder
-        self.energy0 = energy0
         self.z_current = z_current#sample
         self.args = args
         self.gpu_mode = args.gpu_mode
@@ -173,14 +172,19 @@ class AIS(object):
 
         return E
 
-    def get_energy0(self, z):
+    def get_energy0(self, z, params_posterior):
         
-        E = self.energy0(z, self.params_posterior)
+        N, T = z.size()
+        z_mean = params_posterior[0]
+        log_z_std = params_posterior[1]
+        E = -utils.get_pdf_gauss(z_mean, log_z_std, z)
         return E
 
+    
     def read_batch(self, sess):
         sess.run(self.init_batch)
 
+        
     def evaluate(self):
         is_adaptive_eps = self.config['test_is_adaptive_eps']
         nsteps = self.config['test_ais_nsteps']
