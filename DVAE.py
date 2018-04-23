@@ -245,9 +245,13 @@ class DVAE(nn.Module):
         res = self.decode(z)
         return res, mu, logsig, z
     
-    def energy0(z, theta):
+    def energy0(self,z, theta):
+        N,D,T = z.size()
         z_mean = theta[0]
+        z_mean = z_mean.view(N*D,T)
         log_z_std = theta[1]
+        log_z_std = log_z_std.view(N*D,T)
+        z = z.view(N*D,T)
         return -utils.get_pdf_gauss(z_mean, log_z_std, z)
     
     def get_z0(theta,batch_size,z_dim):
@@ -255,10 +259,15 @@ class DVAE(nn.Module):
         z_std = torch.exp(theta[1])
         return z_mean + z_std * torch.randn([batch_size, z_dim])
     
-    def testing_ais(self,recon_batch,x_,Z,mu,logvar,args):
+     
+    
+    def testing_ais(self,recon_batch,x_,mu,logvar,args):
         params_posterior = [mu, logvar]
-        decoder = self.decode
+        
+        decoder = self.decode   
         log_dir = args.log_dir
+        z_current = self.get_z0(params_posterior,args.batch_size,args.z_dim)
+        
         eval_dir = args.eval_dir
         z_dim = args.z_dim
         stats = defaultdict(list)
@@ -268,12 +277,12 @@ class DVAE(nn.Module):
         batch_size = args.batch_size
         ais_nchains = args.test_ais_nchains
         test_nais = args.test_nais
+         ais=AIS(x_,Z,params_posterior,decoder,self.energy0,z_current,args)
         
-        ais=AIS(x_,params_posterior,decoder,self.energy0,self.get_z0,args)
-        ais.read_batch(recon_batch)
+        
         progress_ais = tqdm(range(ais_nchains), desc="AIS")
         for j in progress_ais:
-            ais_res[j], ais_samples[j] = ais.evaluate(sess)
+            ais_res[j], ais_samples[j] = ais.evaluate()
             ais_lprob, ais_ess = ais.average_weights(ais_res[:j+1], axis=0)
             progress_ais.set_postfix(
                 lprob="%.2f+-%.2f" % (ais_lprob.mean(), ais_lprob.std()),

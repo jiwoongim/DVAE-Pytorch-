@@ -83,7 +83,7 @@ def train(model, args, data_loader_tr, data_loader_vl):
                 lle  = model.log_likelihood_estimate(recon_batch, x_, Z, mu, logvar)
                 train_hist['vl_loss'].append(lle.data[0])
 
-                ais = model.testing_ais(recon_batch, x_, Z, mu, logvar,args)
+                ais = model.testing_ais(recon_batch, x_, mu, logvar,args)
                 ['ais_loss'].append(ais.data[0])
                 if ((iter + 1) % 100) == 0:
                     print("Epoch: [%2d] [%4d/%4d] Train loss: %.8f Valid  lle %.8f  Elbo (loss) %.8f  AIS %.8f" %

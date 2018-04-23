@@ -3,7 +3,6 @@ import numpy as np
 import scipy as sp
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
@@ -12,99 +11,87 @@ torch.manual_seed(1)
 torch.cuda.manual_seed_all(1)
 
 class AIS(object):
-    def __init__(self,x_test,params_posterior,decoder,energy0,z_current,args, eps_scale=None):
+    def __init__(self,x_text,params_posterior,decoder,energy0,sample,args, eps_scale=None):
         self.x_in = x_test
         self.params_posterior_in = params_posterior
         self.decoder = decoder
         self.energy0 = energy0
-        self.z_current = z_current#sample
-        self.z = Z
+        self.get_z0 = sample
         self.args = args
         self.gpu_mode = args.gpu_mode
-        self.num_sam = args.num_sam
     
         if eps_scale is None:
-            self.eps_scale_in = torch.ones([args.batch_size, args.z_dim])
+            self.eps_scale_in = torch.ones([args['batch_size'], args['z_dim']])
         else:
             self.eps_scale_in = eps_scale
     
         self.build_model()
     def build_model(self):
-        batch_size= self.args.batch_size
-        output_size= self.args.output_size
-        c_dim = self.args.c_dim
-        z_dim = self.args.z_dim
-        self.x=Variable(torch.Tensor([batch_size,output_size,output_size,c_dim]))
+        batch_size= self.args['batch_size']
+        output_size= self.args['output_size']
+        c_dim = self.args['c_dim']
+        z_dim = self.args['z_dim']
+        self.x=Variable(torch.zeros([batch_size,output_size,output_size,c_dim],
+                                    dtype=np.float32),trainable=False)
         self.params_posterior = [
-            Variable(torch.zeros(p0.size()).cuda(),requires_grad=False)
+            Variable(torch.zeros(p0.get_shape()), trainable=False)
             for p0 in self.params_posterior_in
         ]
-        self.eps_scale = Variable(torch.Tensor([batch_size, z_dim]),requires_grad=False)
+        self.eps_scale = Variable(torch.zeros([batch_size, z_dim]), trainable=False)
         self.mass = 1.#/self.var0
         mass_sqrt = 1.#/self.std0
-        #self.z = #Variable(torch.Tensor([batch_size, z_dim]))
-   
-       
-        if self.gpu_mode:
-            self.p = Variable(torch.Tensor([batch_size, z_dim]).cuda())
+        self.z = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
+        self.p = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
 
-            self.z_current = Variable(torch.Tensor([batch_size, z_dim]).cuda(),requires_grad=False)
-            self.p_current = Variable(torch.Tensor([batch_size, z_dim]).cuda(),requires_grad=False)
+        self.z_current = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
+        self.p_current = Variable(np.zeros([batch_size, z_dim], dtype=np.float32), trainable=False)
+        if self.gpu_mode:
             self.p_rnd = torch.randn([batch_size, z_dim]).cuda() * mass_sqrt
         else:
             self.p_rnd = torch.randn([batch_size, z_dim])* mass_sqrt
-            self.p = Variable(torch.Tensor([batch_size, z_dim]))
-            self.z_current = Variable(torch.Tensor([batch_size, z_dim]),requires_grad=False)
-            self.p_current = Variable(torch.Tensor([batch_size, z_dim]),requires_grad=False)
             
         
         #self.eps = torch.FloatTensor() 
         #self.beta = torch.FloatTensor()
-        self.x=self.x_in
-        self.eps_scale=self.eps_scale_in
-        # Hamiltoninan
-        
-        self.U = self.get_energy(self.z,1)#self.z_current, beta
-        self.V = 0.5 * torch.sum(self.p**2/self.mass, dim=0)
 
+        # Hamiltoninan
+        self.U = self.get_energy(self.z)
+        self.V = 0.5 * torch.sum(torch.square(self.p)/mass, dim=1)
         self.H = self.U + self.V
-        self.U_current = self.get_energy(self.z,1)#self.z_current, beta
-        self.V_current = 0.5 * torch.sum(self.p_current**2/self.mass, dim=0)
+        self.U_current = self.get_energy(self.z_current)
+        self.V_current = 0.5 * torch.sum(torch.square(self.p_current)/mass, dim=1)
         self.H_current = self.U_current + self.V_current
-        
-        
+
         # Intialize
-        #self.init_batch = [
-        #    self.x.assign(self.x_in),
-        #   self.eps_scale.assign(self.eps_scale_in)]
-       
-     
-        for (p, p_in) in zip(self.params_posterior, self.params_posterior_in):
-            p = p_in
-        
-        import pdb; pdb.set_trace()
-        #self.z_current= #self.get_z0(self.params_posterior,self.args.batch_size,self.args.z_dim)
-        self.init_hmc =  self.z_current
-        self.p_current= self.p_rnd
-        self.init_hmc_step = [self.p_current]
-        self.z=self.z_current
-        self.p=self.p_current
+        self.init_batch = [
+            self.x.assign(self.x_in),
+            self.eps_scale.assign(self.eps_scale_in),
+        ]
+        self.init_batch += [
+            p.assign(p_in) for (p, p_in) in zip(self.params_posterior, self.params_posterior_in)
+        ]
+
+        self.init_hmc =  self.z_current.assign(self.get_z0(self.params_posterior))
+
+        self.init_hmc_step = [
+            self.p_current.assign(self.p_rnd)
+        ]
+
         self.init_hmc_step2 = [
-           self.z,
-            self.p,
+            self.z.assign(self.z_current),
+            self.p.assign(self.p_current),
         ]
         # Euler steps
         eps_scaled = self.eps_scale * self.eps
 
-        self.z+=eps_scaled * self.p/self.mass
-        self.euler_z = self.z
+
+        self.euler_z = self.z.assign_add(eps_scaled * self.p/mass)
         gradU = torch.reshape(torch.gradients(self.U, self.z), [batch_size, z_dim])
-        self.p+=-eps_scaled * gradU
-        self.euler_p = self.p
+        self.euler_p = self.p.assign_sub(eps_scaled * gradU)
 
         # Accept
-         #self.is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(self.H_current - self.H), tf.float32)
-        self.is_accept = torch.cast(torch.FloatTensor([batch_size]).uniform_()< toch.exp((self.H_current - self.H),torch.cuda.FloatTensor))
+        #self.is_accept = torch.cast(tf.random_uniform([batch_size]) < toch.exp(self.H_current - self.H), tf.float32)
+        self.is_accept = torch.cast(torch.FloatTensor(([batch_size])).uniform_() < toch.exp(self.H_current - self.H), tf.float32)
         self.accept_rate = torch.mean(self.is_accept)
 
         is_accept_rs = torch.reshape(self.is_accept, [batch_size, 1])
@@ -130,7 +117,7 @@ class AIS(object):
         #TODO Convert tf.random_uniform([batch_size]) to torch code
         H = self.get_hamiltonian(beta)
         H_current = self.get_hamiltonian_cur(beta)
-        is_accept = torch.cast(torch.FloatTensor([batch_size]).uniform_() < torch.exp((H_current - H), torch.cuda.FloatTensor))
+        is_accept = torch.cast(torch.FloatTensor(([batch_size])).uniform_() < toch.exp(H_current - H), torch.cuda.FloatTensor)
         self.accept_rate = torch.mean(is_accept)
 
         is_accept_rs = is_accept.view([batch_size, 1])
@@ -159,39 +146,39 @@ class AIS(object):
     
     def get_energy(self, z, beta):
         E = beta*self.get_energy1(z) + (1 - beta) * self.get_energy0(z)
-        return E    
+        return E
+
+    def get_reconstr_err(decoter_out,x,config):
+        cond_dist =config.recon_type
+        if cond_dist = 'binary':
+            
+        else:
         
     def get_energy1(self, z):
-        N,D,T = z.size()
         decoder_out = self.decoder(z)
-        x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
-        x = x_tile.view([self.num_sam*N,-1])
-        z = z.view([self.num_sam*N,-1])
-        recon_x = decoder_out.view([self.num_sam*N,-1])
-        E = utils.get_reconstr_err(recon_x, x, self.args)
+        E = get_reconstr_err(decoder_out, self.x, self.config)
         # Prior
-        E += torch.sum(
-            0.5 * z*z + 0.5 * np.log(2*np.pi), 1
+        E += troch.sum(
+            0.5 * torch.square(z) + 0.5 * np.log(2*np.pi), [1]
         )
 
         return E
 
     def get_energy0(self, z):
-        
         E = self.energy0(z, self.params_posterior)
         return E
 
     def read_batch(self, sess):
         sess.run(self.init_batch)
 
-    def evaluate(self):
+    def evaluate(self, sess):
         is_adaptive_eps = self.config['test_is_adaptive_eps']
         nsteps = self.config['test_ais_nsteps']
         batch_size = self.config['batch_size']
         eps = self.config['test_ais_eps']
 
         # logZ = sess.run(tf.reduce_sum(tf.log(self.std0), [1]))
-        #logZ = self.z_dim * 0.5 * np.log(2*np.pi)
+        # logZ = self.z_dim * 0.5 * np.log(2*np.pi)
         logpx = 0.
         weights = np.zeros([100, batch_size])
 
@@ -202,6 +189,8 @@ class AIS(object):
         # Initializing hmc 
         self.z_current = self.get_z0(self.params_posterior) 
         #sess.run(self.init_hmc)
+       
+
         progress = tqdm(range(nsteps), desc="HMC")
         for i in progress:
             f0 = -self.get_energy(self.z_current, betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})

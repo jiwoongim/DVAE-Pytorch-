@@ -27,12 +27,14 @@ torch.cuda.manual_seed_all(1)
 #
 #    c = T.eq(a,0) * b
 #    return input * a + c
+
+
 def get_reconstr_err(decoder_out,x,config):
         cond_dist =config.recon_type
+        
         if cond_dist == 'binary':
-            p_logits = decoder_out[0]
-            reconst_err = torch.sum( F.sigmoid_cross_entropy_with_logits(logits=p_logits, labels=x)
-        )
+            #reconst_err = torch.sum( F.sigmoid_cross_entropy_with_logits(logits=p_logits, labels=x))
+            reconst_err = torch.sum(-x*torch.log(decoder_out)-(1.0-x)*torch.log(1.-decoder_out),1)
             
         else:
             loc = F.sigmoid(decoder_out[0])
@@ -46,7 +48,9 @@ def get_decoder_mean(decoder_out):
 
 def get_pdf_gauss(loc, log_scale, sample):
     scale = torch.exp(log_scale)
-    pdf = -torch.sum(0.5 * ((sample - loc)/scale)**2 + log_scale + 0.5*np.log(2*np.pi), [1])
+   
+    pdf = -torch.sum(0.5 * ((sample - loc)/scale)**2 + log_scale + 0.5*np.log(2*np.pi), 1)
+   
     return pdf
 
 def uploadG(critic_type, dataset):
