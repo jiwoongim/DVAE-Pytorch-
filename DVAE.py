@@ -266,7 +266,8 @@ class DVAE(nn.Module):
         
         decoder = self.decode   
         log_dir = args.log_dir
-        z_current = self.get_z0(params_posterior,args.batch_size,args.z_dim)
+        z = self.get_z0(params_posterior,args.batch_size,args.z_dim)
+        z = z.view([self.num_sam*self.batch_size,-1])
         
         eval_dir = args.eval_dir
         z_dim = args.z_dim
@@ -277,7 +278,10 @@ class DVAE(nn.Module):
         batch_size = args.batch_size
         ais_nchains = args.test_ais_nchains
         test_nais = args.test_nais
-         ais=AIS(x_,Z,params_posterior,decoder,self.energy0,z_current,args)
+        
+        x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
+        x = x_tile.view([self.num_sam*N,-1])
+        ais=AIS(x,Z,params_posterior,decoder,self.energy0,z,args)
         
         
         progress_ais = tqdm(range(ais_nchains), desc="AIS")
