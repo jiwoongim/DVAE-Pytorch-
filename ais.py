@@ -18,7 +18,6 @@ class AIS(object):
         self.decoder = decoder
         self.energy0 = energy0
         self.z_current = z_current#sample
-        self.z = Z
         self.args = args
         self.gpu_mode = args.gpu_mode
         self.num_sam = args.num_sam
@@ -42,10 +41,10 @@ class AIS(object):
         self.eps_scale = Variable(torch.Tensor([batch_size, z_dim]),requires_grad=False)
         self.mass = 1.#/self.var0
         mass_sqrt = 1.#/self.std0
-        #self.z = #Variable(torch.Tensor([batch_size, z_dim]))
    
        
         if self.gpu_mode:
+            self.z = Variable(torch.Tensor([batch_size, z_dim]).cuda(),requires_grad=False)
             self.p = Variable(torch.Tensor([batch_size, z_dim]).cuda())
 
             self.z_current = Variable(torch.Tensor([batch_size, z_dim]).cuda(),requires_grad=False)
@@ -162,11 +161,9 @@ class AIS(object):
         return E    
         
     def get_energy1(self, z):
-        N,D,T = z.size()
+        N, T = z.size()
         decoder_out = self.decoder(z)
-        x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
-        x = x_tile.view([self.num_sam*N,-1])
-        z = z.view([self.num_sam*N,-1])
+        #z = z.view([self.num_sam*N,-1])
         recon_x = decoder_out.view([self.num_sam*N,-1])
         E = utils.get_reconstr_err(recon_x, x, self.args)
         # Prior
@@ -190,8 +187,6 @@ class AIS(object):
         batch_size = self.config['batch_size']
         eps = self.config['test_ais_eps']
 
-        # logZ = sess.run(tf.reduce_sum(tf.log(self.std0), [1]))
-        #logZ = self.z_dim * 0.5 * np.log(2*np.pi)
         logpx = 0.
         weights = np.zeros([100, batch_size])
 
@@ -200,8 +195,7 @@ class AIS(object):
 
         t = time.time()
         # Initializing hmc 
-        self.z_current = self.get_z0(self.params_posterior) 
-        #sess.run(self.init_hmc)
+        #self.z_current = self.get_z0(self.params_posterior) 
         progress = tqdm(range(nsteps), desc="HMC")
         for i in progress:
             f0 = -self.get_energy(self.z_current, betas[i])  # -sess.run(self.U_current, feed_dict={self.beta: betas[i]})
@@ -209,7 +203,7 @@ class AIS(object):
             logpx += f1 - f0
 
             if i < nsteps-1:
-                accept_rate = self.run_hmc_step(sess, betas[i+1], eps)
+                accept_rate = self.run_hmc_step(betas[i+1], eps)
                 if is_adaptive_eps and accept_rate < 0.6:
                     eps = eps / 1.1
                 elif is_adaptive_eps and accept_rate > 0.7:
@@ -223,7 +217,7 @@ class AIS(object):
 
         return logpx, samples
 
-    def run_hmc_step(self, sess, beta, eps):
+    def run_hmc_step(self, beta, eps):
         L = 10 # TODO: make configuratble
         
         # Initialize
