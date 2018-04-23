@@ -259,8 +259,8 @@ class DVAE(nn.Module):
         log_dir = args.log_dir
         
         logstd = 0.5*logvar
-        logstd = logstd.view([self.num_sam*self.batch_size,-1])
-        mu = mu.view([self.num_sam*self.batch_size,-1])
+        logstd = logstd.view([self.num_sam*self.batch_size,-1]).contiguous()
+        mu = mu.view([self.num_sam*self.batch_size,-1]).contiguous()
         
         z = self.get_z0(args.batch_size,args.z_dim,mu,logvar)
         z = z.view([self.num_sam*self.batch_size,-1])
