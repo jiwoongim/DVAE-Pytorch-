@@ -180,7 +180,7 @@ def parse_args():
     parser.add_argument("--test-nais", default=10, type=int, help="Number of iterations of ais.")
     parser.add_argument("--test-ais-nchains", default=16, type=int, help="Number of chains for ais.")
     parser.add_argument("--test-ais-nsteps", default=100, type=int, help="Number of annealing steps for ais.")
-    parser.add_argument("--test-ais-eps", default=1e-2, type=float, help="Stepsize for AIS.")
+    parser.add_argument("--test_ais_eps", default=1e-2, type=float, help="Stepsize for AIS.")
     parser.add_argument("--test-is-center-posterior", default=False, action='store_true', help="Wether to center posterior plots.")
 
     parser.add_argument('--recon_type',default='binary',choices=['binary'],type=str,help="Reconstruction Type")

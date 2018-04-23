@@ -246,9 +246,7 @@ class DVAE(nn.Module):
         return res, mu, logsig, z
    
     
-    def get_z0(self, batch_size,z_dim,z_mean, z_std):
-        z_std = torch.exp(z_std)
-        return z_mean + z_std * torch.randn([batch_size, z_dim])
+
     
      
     
@@ -262,10 +260,9 @@ class DVAE(nn.Module):
         logstd = logstd.view([self.num_sam*self.batch_size,-1]).contiguous()
         mu = mu.contiguous()
         mu = mu.view([self.num_sam*self.batch_size,-1])
-        
-        z = self.get_z0(args.batch_size,args.z_dim,mu,logstd*2)
+
+        z = self.sample(mu,logstd*2)
         z = z.view([self.num_sam*self.batch_size,-1])
-        
         eval_dir = args.eval_dir
         z_dim = args.z_dim
         stats = defaultdict(list)
@@ -276,8 +273,8 @@ class DVAE(nn.Module):
         ais_nchains = args.test_ais_nchains
         test_nais = args.test_nais
         
-        x_tile = self.x.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
-        x = x_tile.view([self.num_sam*N,-1])
+        x_tile = x_.repeat(self.num_sam,1,1,1,1).permute(1,0,2,3,4).contiguous()
+        x = x_tile.view([self.num_sam*self.batch_size,-1])
         
         params_posterior = [mu, logstd]
         ais=AIS(x,params_posterior,decoder,z,args)
