@@ -246,9 +246,8 @@ class DVAE(nn.Module):
         return res, mu, logsig, z
    
     
-    def get_z0(theta,batch_size,z_dim):
-        z_mean = theta[0]
-        z_std = torch.exp(theta[1])
+    def get_z0(batch_size,z_dim,z_mean, z_std):
+        z_std = torch.exp(z_std)
         return z_mean + z_std * torch.randn([batch_size, z_dim])
     
      
@@ -259,7 +258,7 @@ class DVAE(nn.Module):
         decoder = self.decode   
         log_dir = args.log_dir
         
-        z = self.get_z0(params_posterior,args.batch_size,args.z_dim)
+        z = self.get_z0(args.batch_size,args.z_dim,mu,logvar)
         z = z.view([self.num_sam*self.batch_size,-1])
         
         eval_dir = args.eval_dir
