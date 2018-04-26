@@ -31,7 +31,7 @@ class AIS(object):
         z_dim = self.args.z_dim
         self.x=Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam,784])))
         self.params_posterior = [
-            Variable(torch.zeros(p0.size()).cuda(),requires_grad=False)
+            Variable(torch.zeros(p0.size()).cuda())
             for p0 in self.params_posterior_in
         ]
         self.eps_scale = Variable(torch.Tensor(np.ones([self.batch_size*self.num_sam, z_dim])).cuda(),requires_grad=False)
@@ -40,12 +40,12 @@ class AIS(object):
    
        
         if self.gpu_mode:
-            self.z = Variable(torch.zeros([self.batch_size*self.num_sam, z_dim]).cuda())
-            self.p = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda())
+            self.z = Variable(torch.zeros([self.batch_size*self.num_sam, z_dim]).cuda(),requires_grad=True)
+            self.p = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda(),requires_grad=True)
 
-            self.z_current = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda())
-            self.p_current = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda())
-            self.p_rnd = Variable(torch.randn([self.batch_size*self.num_sam, z_dim]).cuda() * mass_sqrt)
+            self.z_current = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda(),requires_grad=True)
+            self.p_current = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])).cuda(),requires_grad=True)
+            self.p_rnd = Variable(torch.randn([self.batch_size*self.num_sam, z_dim]).cuda() * mass_sqrt,requires_grad=True)
         else:
             self.z = Variable(torch.Tensor(np.zeros([self.batch_size*self.num_sam, z_dim])),requires_grad=False)
             self.p_rnd = torch.randn([self.batch_size*self.num_sam, z_dim])* mass_sqrt
@@ -88,11 +88,12 @@ class AIS(object):
         ]
         # Euler steps
         eps_scaled = self.eps_scale.mul(eps)
-        self.z=self.z.add_( eps_scaled.mul(self.p).div(self.mass))
-        self.euler_z = self.z
+        #self.z=self.z.add( eps_scaled.mul(self.p).div(self.mass))
+        #self.euler_z = self.z
         gradU=[]
         import pdb;pdb.set_trace()
         for i in range(self.U.shape[0]):
+            print(self.U[i])
             gradU.append(torch.autograd.grad(self.U[i], self.z))
         
         gradU=torch.stack(gradU)
